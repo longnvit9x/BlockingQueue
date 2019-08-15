@@ -1,20 +1,22 @@
 package neo.vn.myapplication
 
-import com.google.gson.GsonBuilder
+import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
+import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
-import okhttp3.OkHttpClient
-import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
-import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
-import retrofit2.converter.gson.GsonConverterFactory
 import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
 import java.util.concurrent.BlockingQueue
 import java.util.concurrent.TimeUnit
 
 
-class CrunchifyBlockingConsumer(val queue: BlockingQueue<CrunchierMessage>) : Runnable {
+class CrunchifyBlockingConsumer(
+    var name: String,
+    var mainView: MainView? = null,
+    val queue: BlockingQueue<CrunchierMessage>
+) : Runnable {
+    var isRunning = true
     fun toMd5(s: String): String {
         val MD5 = "MD5"
         try {
@@ -27,7 +29,7 @@ class CrunchifyBlockingConsumer(val queue: BlockingQueue<CrunchierMessage>) : Ru
             // Create Hex String
             val hexString = StringBuilder()
             for (aMessageDigest in messageDigest) {
-                var h = Integer.toHexString( (0xFF and aMessageDigest.toInt()))
+                var h = Integer.toHexString((0xFF and aMessageDigest.toInt()))
                 while (h.length < 2)
                     h = "0$h"
                 hexString.append(h)
@@ -40,54 +42,55 @@ class CrunchifyBlockingConsumer(val queue: BlockingQueue<CrunchierMessage>) : Ru
 
         return ""
     }
+
+    var idServer = 1
+    var disposable = CompositeDisposable()
     override fun run() {
         try {
             var msg: CrunchierMessage
 
             // consuming messages until exit message is received
 
-            do {
+            while (isRunning) {
+                println("Consumer: $name")
                 msg = queue.take()
-                val gson = GsonBuilder().setDateFormat("yyyy-MM-dd'T'HH:mm:ssZZ").serializeNulls()
-                    .setLenient().create()
-                val httpClient = OkHttpClient.Builder()
-                httpClient.connectTimeout(1, TimeUnit.MINUTES)
-                httpClient.readTimeout(30, TimeUnit.SECONDS)
-                httpClient.writeTimeout(20, TimeUnit.SECONDS)
-                httpClient.connectTimeout(60, TimeUnit.SECONDS)
-                val retrofit = Retrofit.Builder()
-                    .baseUrl("http://ksan.neo.vn/")
-                    .addConverterFactory(GsonConverterFactory.create(gson))
-                    .addCallAdapterFactory(RxJava2CallAdapterFactory.create())
-                    .build()
-                if (BuildConfig.DEBUG) {
-                    val logging = HttpLoggingInterceptor()
-                    logging.level = HttpLoggingInterceptor.Level.BODY
-                    httpClient.addInterceptor(logging)
-                }
-                var respone: String?= null
-                val api = retrofit.create(ApiService::class.java)
-                api.getAuthority(
-                    user = msg.user,
-                    pass = toMd5(msg.password),
-                    deviceId = "Đasadasd"
-                )
-                    .subscribeOn(Schedulers.io())
+                var isResponse: Boolean? = null
+                var dis: Disposable? = null
+                dis = Observable.just(msg.apply {
+                    this.id = idServer
+                    idServer++
+                })   .timeout ( 5000, TimeUnit.MILLISECONDS)
+                    .delay(3000, TimeUnit.MILLISECONDS).subscribeOn(Schedulers.newThread())
                     .observeOn(AndroidSchedulers.mainThread())
                     .subscribe({ user ->
-                        respone= user.body()
+                        mainView?.getDataSuccess(user)
+                        isResponse = true
+                        println("Consumer: succes - " + msg.idLocal)
+                        dis?.let {
+                            disposable.remove(it)
+                        }
                     }, {
-                        respone= it.message
+                        mainView?.getDataError(it.message)
+                        isResponse = false
+                        println("Consumer: Error task- " + it.message + msg.password)
+                        dis?.let {
+                            disposable.remove(it)
+                        }
                     }
                     )
-                while (respone.isNullOrEmpty()) {
+                disposable.add(dis)
+                while (isResponse == null) {
+                    println("Task running ${msg.idLocal} ${msg.password}")
                 }
-                println("CrunchifyBlockingConsumer: Message - " + msg.user+ respone + " consumed.")
-            } while (queue.isEmpty())
-            println(msg)
+                println("Task done ${msg.idLocal} ${msg.password}")
+            }
+            println("Exist consumed. $name")
         } catch (e: InterruptedException) {
-            e.printStackTrace()
+            println("Consumer: Error - " + e.message + " consumed.")
         }
+    }
 
+    fun stop() {
+        isRunning = false
     }
 }

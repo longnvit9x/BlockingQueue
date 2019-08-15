@@ -1,5 +1,5 @@
 package neo.vn.myapplication
 
-class CrunchierMessage(val user: String, val password: String) {
+class CrunchierMessage(var user: String, var password: String, var id:Int, var idLocal: Int, var requestId: Long) {
 
 }
