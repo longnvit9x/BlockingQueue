@@ -29,6 +29,12 @@
     <Button android:layout_width="match_parent" android:layout_height="wrap_content"
             android:text="edit B"
             android:onClick="clickUpdateB"/>
+    <Button android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="start consumer"
+            android:onClick="clickStart"/>
+    <Button android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="stop consumer"
+            android:onClick="clickStop"/>
    <ListView
            android:id="@+id/lv_result"
            android:layout_width="match_parent"

@@ -46,12 +46,11 @@ class CrunchifyBlockingConsumer(
     var idServer = 1
     var disposable = CompositeDisposable()
     override fun run() {
-        try {
-            var msg: CrunchierMessage
 
-            // consuming messages until exit message is received
-
-            while (isRunning) {
+        var msg: CrunchierMessage
+        // consuming messages until exit message is received
+        while (isRunning) {
+            try {
                 println("Consumer: $name")
                 msg = queue.take()
                 var isResponse: Boolean? = null
@@ -59,7 +58,7 @@ class CrunchifyBlockingConsumer(
                 dis = Observable.just(msg.apply {
                     this.id = idServer
                     idServer++
-                })   .timeout ( 5000, TimeUnit.MILLISECONDS)
+                }).timeout(5000, TimeUnit.MILLISECONDS)
                     .delay(3000, TimeUnit.MILLISECONDS).subscribeOn(Schedulers.newThread())
                     .observeOn(AndroidSchedulers.mainThread())
                     .subscribe({ user ->
@@ -79,18 +78,23 @@ class CrunchifyBlockingConsumer(
                     }
                     )
                 disposable.add(dis)
-                while (isResponse == null) {
+                while (isResponse == null && isRunning) {
                     println("Task running ${msg.idLocal} ${msg.password}")
                 }
                 println("Task done ${msg.idLocal} ${msg.password}")
+            } catch (e: InterruptedException) {
+                println("Consumer: Error - " + e.message + " consumed.")
             }
-            println("Exist consumed. $name")
-        } catch (e: InterruptedException) {
-            println("Consumer: Error - " + e.message + " consumed.")
         }
+
+        println("Exist consumed. $name")
     }
 
     fun stop() {
         isRunning = false
+    }
+
+    fun start() {
+        isRunning = true
     }
 }

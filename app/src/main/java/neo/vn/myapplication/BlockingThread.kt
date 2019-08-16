@@ -6,5 +6,4 @@ class BlockingThread : Thread {
     constructor(runnable: CrunchifyBlockingConsumer) : super(runnable) {
         this.runnable = runnable
     }
-
 }
